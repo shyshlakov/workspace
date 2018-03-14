@@ -1,0 +1,234 @@
+﻿@model IEnumerable<StrangeProject_2.Models.ListModel>
+@{
+    ViewData["Title"] = "Home Page";
+}
+
+
+<style>
+    input[type="button"]:disabled {
+        border: 1px solid #999999;
+        background-color: #cccccc;
+        color: #808080;
+    }
+</style>
+<h3>List</h3>
+<ul class="list-group" id="myList" style="width: 600px;">
+    @foreach (var item in Model)
+    {
+        //<li class="list-group-item  clickable-row" id="@item.Id" position="@item.Index">@item.Text</li>
+
+        <li class="list-group-item" id="@item.Id" position="@item.Index">
+            <ul class="list-inline">
+                <li style="width: 400px;" class="list-group-item  clickable-row" childid="@item.Id" childposition="@item.Index">@item.Text </li>
+                <li btnId="@item.Id"></li>
+            </ul>
+        </li>
+    }
+</ul>
+<div>
+    <input type="text" id="inputField" style="width: 400px"/>
+    <input type='button' id='addButton' value='Add' onclick="AddRow();" disabled />
+    <input type='button' id='editButton' value='Save' hidden onclick="EditRow();" />
+    <input type='button' id='cancelButton' value='Cancel' hidden onclick="CloseEditMode();" />
+</div>
+
+<div id="dialog" hidden title="Confirmation">
+    Are you sure about this?
+</div>
+<script type="text/javascript">
+    $(document).ready(function ($) {
+        $('#myList').on('click', '.clickable-row', function (event) {
+            $('.active').removeClass('active');
+            $(this).addClass('active');
+
+            var id = this.getAttribute('childid');
+
+            $("[id^='btn']").remove();
+
+            var str = "<div class='pull-right'>input</div>"
+            var input = "<input class='pull-right' type='button' id='btnDelete" + id + "' value='X' onclick='OpenConfirmDialog(" + id + ")'/>";
+            input += "<input class='pull-right' type='button' id='btnEdit" + id + "' value='...' onclick='OpenEditMode(" + id + ")'/>";
+            input += "<input class='pull-right' type='button' id='btnTop" + id + "' onclick='SwapTags(" + id + "," + this.getAttribute('childposition') + ",-1)' value='&#8593;'/>";
+            input += "<input class='pull-right' type='button' id='btnBot" + id + "' onclick='SwapTags(" + id + "," + this.getAttribute('childposition') + ",1)' value='&#8595;'/>";
+
+            $('[btnid=' + id + ']').append(str.replace("input", input));
+        });
+
+        $('#inputField').keyup(function () {
+            if ($('#inputField').val() != "") {
+                $('#addButton').removeAttr('disabled');
+                $('#editButton').removeAttr('disabled');
+            }
+            else {
+                $('#addButton').attr('disabled', true);
+                $('#editButton').attr('disabled', true);
+            }
+        });
+
+
+    });
+
+
+    function SwapTags(id, currentPositionId, value) {
+
+        var arr = $('.list-group-item').not(".clickable-row");
+
+        mainTag = $('[position=' + currentPositionId + ']');
+
+        var index = mainTag.index() + parseInt(value);
+
+        if (arr[index] != undefined) {
+            secondTag = $('#' + arr[index].id)
+            var childPositionId = secondTag.attr('position');
+            mainClone = mainTag.clone();
+            secondClone = secondTag.clone();
+
+
+            mainTag.replaceWith(secondClone);
+            secondTag.replaceWith(mainClone);
+
+            $('[position=' + currentPositionId + ']').attr('position', childPositionId);
+            $('[position=' + childPositionId + '][id!=' + id + ']').attr('position', currentPositionId);
+
+            $('[childposition=' + currentPositionId + ']').attr('childposition', childPositionId);
+            $('[childposition=' + childPositionId + '][childid!=' + id + ']').attr('childposition', currentPositionId);
+
+            $('[childid=' + id + ']').click();
+
+            UpdatePosition(id, childPositionId);
+        }
+    }
+
+    function UpdatePosition(id, newIndex) {
+        $.ajax({
+            url: '@Url.Action("UpdatePosition", "Home")',
+            data: {
+                id: id,
+                newIndex: newIndex
+            }
+        });
+
+    }
+
+    function AddRow() {
+           $.ajax({
+            url: '@Url.Action("AddRow", "Home")',
+            data: {
+                value: $('#inputField').val()
+               },
+               success: function (data) {
+                   var ul = document.getElementById("myList");
+
+                   var li = document.createElement("li");
+                   li.className = "list-group-item";
+                   li.setAttribute("id", data.id);
+                   li.setAttribute("position", data.index);
+
+                   var childUl = document.createElement("ul");
+                   childUl.className = "list-inline";
+
+                   var childLiFirst = document.createElement("li");
+                   childLiFirst.style = "width: 400px;";
+                   childLiFirst.className = "list-group-item  clickable-row";
+                   childLiFirst.setAttribute("childid", data.id);
+                   childLiFirst.setAttribute("childposition", data.index);
+                   childLiFirst.appendChild(document.createTextNode($('#inputField').val()));
+
+                   var childLiSecond = document.createElement("li");
+                   childLiSecond.setAttribute("btnId", data.id);
+
+                   childUl.appendChild(childLiFirst);
+                   childUl.appendChild(childLiSecond);
+                   li.appendChild(childUl);
+                   ul.appendChild(li);
+
+                   ul.insertBefore(li, ul.childNodes[0]);
+
+                   $('#inputField').val("");
+                   $('#inputField').keyup();
+               }
+
+        });
+    }
+
+    function OpenEditMode(rowId) {
+        $('#inputField').val($('[childid=' + rowId + ']').text());
+
+        $('#addButton').hide();
+        $('#editButton').show();
+        $('#cancelButton').show();
+
+        var arr = $('.list-group-item.clickable-row');
+
+        arr.each(function (index, value) {
+            arr[index].className += " disabled";
+            arr[index].className = arr[index].className.replace('clickable-row', '');
+        });
+        $("[id^='btn']").remove();
+        $('#inputField').keyup();
+    }
+
+    function EditRow() {
+
+        $.ajax({
+            url: '@Url.Action("EditRow", "Home")',
+            data: {
+                id: $('.active').attr('childid'),
+                value: $('#inputField').val()
+            },
+            success: function () {
+                $('.active').text($('#inputField').val());
+
+                CloseEditMode();
+
+            }
+        });
+
+    }
+
+    function CloseEditMode() {
+        $('#inputField').val("");
+        $('#addButton').show();
+        $('#editButton').hide();
+        $('#cancelButton').hide();
+
+        var arr = $('.list-group-item.disabled');
+        arr.each(function (index, value) {
+            arr[index].className += " clickable-row";
+            arr[index].className = arr[index].className.replace('disabled', '');
+        });
+
+        $('[childid=' + $('.active').attr('childid') + ']').click()
+        $('#inputField').keyup();
+
+    }
+
+    function OpenConfirmDialog(id) {
+        $("#dialog").dialog({
+            autoOpen: true,
+            modal: true,
+            buttons: {
+                "Yes": function () {
+                    Delete(id);
+                    $(this).dialog("close");
+                },
+                "Nope": function () {
+                    $(this).dialog("close");
+                }
+            }
+        })
+    }
+
+    function Delete(id) {
+        $.ajax({
+            url: '@Url.Action("DeleteRow", "Home")',
+            data: {
+                id: id,
+            },
+            success: function () {
+                $('#' + id).remove();
+            }
+        });
+
+    }
+</script>
